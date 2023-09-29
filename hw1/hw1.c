@@ -4,6 +4,8 @@
 */
 
 #include "unp.h"
+
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -292,6 +294,14 @@ int bind_Sock(int curr_port)
     return sockfd;
 }
 
+/// @brief alarm handler for WRQ DATA, mainly used to interrupt system call
+/// @param signo signal
+void alarm_handlerWRQ(int signo) 
+{
+    // This handler will be called when the alarm timer expires.
+    printf("Alarm for WRQ by child process %d triggered!\n", getpid());
+}
+
 /// @brief reply to WRQ request and send ACK for incoming DATA sockets
 /// @param buffer buffer that stored WRQ socket
 /// @param Opcode OpCode for the WRQ socket
@@ -314,6 +324,9 @@ void Reply_WRQ(char* buffer, int Opcode, int cliport, int serport, int buffer_le
     }
     
     printf("WRQ child pid: %d\n", getpid());
+
+    signal(SIGALRM, alarm_handlerWRQ); // Set up a signal handler for SIGALRM
+
     char* Filename = calloc(BUF_LEN, sizeof(char));
     char* Mode = calloc(BUF_LEN, sizeof(char));
     get_FileName(buffer, &Filename, &Mode, buffer_len);
@@ -342,11 +355,6 @@ void Reply_WRQ(char* buffer, int Opcode, int cliport, int serport, int buffer_le
     n = DATA_LEN;
     setvbuf(fp, NULL, _IONBF, 0);
 
-    // blocked out timeout portion
-    //struct timeval timeout={10 ,0}; //set timeout for 10 seconds
-    /* set receive UDP message timeout */
-    //setsockopt(newsockfd,SOL_SOCKET,SO_RCVTIMEO,(char*)&timeout,sizeof(struct timeval));
-
     while (1)
     {
         // send ACK (put on first to reply to WRQ as well)
@@ -358,16 +366,23 @@ void Reply_WRQ(char* buffer, int Opcode, int cliport, int serport, int buffer_le
         }
 
         n = recvfrom(newsockfd, buffer2, BUF_LEN, 0, ( struct sockaddr *) &cliaddr, &len);
-        /*
+        
         if (n < 0)
         {
-            //if  not  heard  from  the  other  party  for  10  seconds
-            // abort  the  connection. 
-            fclose(fp);
-            close(newsockfd);
-            exit(EXIT_FAILURE);
+            if(errno == EINTR)
+            {
+                //if  not  heard  from  the  other  party  for  10  seconds
+                // abort  the  connection. 
+                fclose(fp);
+                close(newsockfd);
+                exit(EXIT_FAILURE);     
+            }
+            else
+            {
+                printf("WRQ recvfrom() failed.\n");
+            }
         }
-        */
+        /**/
 
        // get data from buffer2 to Data_bufer for length n of received message
         get_data(buffer2, Data_buf, n);
@@ -375,6 +390,14 @@ void Reply_WRQ(char* buffer, int Opcode, int cliport, int serport, int buffer_le
         blocknum = reply_blocknum(Opcode, get_Blocknum(buffer2));
         fprintf( fp, "%s", Data_buf );  // put the data into file descriptor
     }
+}
+
+/// @brief alarm handler for RRQ request, mainly used to interrupt system call 
+/// @param signo signal
+void alarm_handlerRRQ(int signo) 
+{
+    // This handler will be called when the alarm timer expires.
+    printf("Alarm for RRQ by child process %d triggered!\n", getpid());
 }
 
 /// @brief reply to RRQ request and send DATA for incoming ACK sockets
@@ -399,6 +422,8 @@ void Reply_RRQ(char* buffer, int Opcode, int cliport, int serport, int buffer_le
     }
 
     printf("RRQ child pid: %d\n", getpid());
+
+    signal(SIGALRM, alarm_handlerRRQ); // Set up a signal handler for SIGALRM
 
     // put this RRQ into a new port for child process
     int newsockfd = bind_Sock(serport);
@@ -427,31 +452,33 @@ void Reply_RRQ(char* buffer, int Opcode, int cliport, int serport, int buffer_le
     fseek(fp, 0, SEEK_SET);
 
     int n;
-    //int n2;
+    int n2;
     int cont = 0;
     char* buffer2 = calloc(BUF_LEN, sizeof(char));
     memset(buffer2, 0, BUF_LEN);
-
-    // blocked out timeout portion
-    //struct timeval timeout={1 ,0}; //set timeout for 1 seconds
-    /* set receive UDP message timeout */
-    //setsockopt(newsockfd,SOL_SOCKET,SO_RCVTIMEO,(char*)&timeout,sizeof(struct timeval));
 
     while (1)
     {
         // send data (put frist to reply for RRQ request) 
         n = send_DATA(newsockfd, Opcode, blocknum, cliaddr, len, cont);
 
-        recvfrom(newsockfd, buffer2, BUF_LEN, 0, ( struct sockaddr *) &cliaddr, &len);
-        //n2 = recvfrom(newsockfd, buffer2, BUF_LEN, 0, ( struct sockaddr *) &cliaddr, &len);
-        /*
+        alarm(1);
+        n2 = recvfrom(newsockfd, buffer2, BUF_LEN, 0, ( struct sockaddr *) &cliaddr, &len);
         if (n2 < 0)
         {
-            // Upon  not  receiving  data  for  1  second,  
-            // your  sender  should  retransmit  its  last  packet.
-            cont = 1;
-            continue;
-        }*/
+            if(errno == EINTR)
+            {
+                // Upon  not  receiving  data  for  1  second,  
+                // your  sender  should  retransmit  its  last  packet.
+                cont = 1;
+                continue;          
+            }
+            else
+            {
+                printf("RRQ recvfrom() failed.\n");
+            }
+        }
+        alarm(0);
 
         // close condition: if data sent < 512 and received ACK from client
         if (n < 512)
