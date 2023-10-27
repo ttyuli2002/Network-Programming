@@ -1,0 +1,49 @@
+1. FTP commands that user has used:
+  a. USER
+  b. PASS
+  c. PWD
+  d. TYPE
+  e. PASV
+  f. LIST
+  g. CWD
+  h. STOR
+  i. RETR
+  j: (SYST)?
+  k: (FEAT)?
+  
+2. FTP codes that have been returned:
+  a. 220
+  b. 331
+  c. 230
+  d. 215
+  f. 211
+  g: 257
+  h: 200
+  i: 227
+  j: 125
+  k: 226
+  l: 250
+  
+3. What is the username and password for the access to the FTP server:
+  USER Name: Administrator
+  Password: napier
+ 
+4. What is the name of the file which is uploaded:
+  111.png
+
+5. What is the name of the file which is downloaded:
+  manual.txt
+
+6.determine the first packet number which performs a "LIST":
+  1st packet number: 21
+
+7. which TCP port is used on the server for the transfer:
+  Port 21
+
+8: From the final “LIST” command, which are the files on the server?
+ ?
+ 
+9: What does the filter ftp.response.code==227 identify in terms of the ports that are used for the transfer:
+  Suppose the given response is: 227 Entering Passive Mode (h1, h2, h3, h4, p1, p2)
+  Then, the port that the server port is listening on is calculated by:
+    PASV port = (p1 * 256) + p2
